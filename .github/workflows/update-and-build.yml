@@ -11,8 +11,11 @@ permissions:
 jobs:
   update:
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
 
       - name: Git Identity
         run: |
@@ -21,6 +24,10 @@ jobs:
             "41898282+github-actions[bot]@users.noreply.github.com"
 
       - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            accept-flake-config = true
 
       - uses: cachix/cachix-action@v16
         with:
@@ -34,14 +41,10 @@ jobs:
           nix run github:cachix/devenv -- tasks run ci:upgrade
           git push
 
-      - name: Update rift-wm
+      - name: Update, Build and Push rift-wm
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           nix run github:cachix/devenv -- tasks run ci:update
           git push
-
-      - name: Build and Push to cachix
-        run: |
-          nix run github:cachix/devenv -- tasks run ci:build
           cachix push "${{ vars.CACHIX_CACHE }}" result
