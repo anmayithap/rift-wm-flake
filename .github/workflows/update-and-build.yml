@@ -1,0 +1,47 @@
+---
+name: update-and-build-rift
+"on":
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Git Identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - uses: cachix/install-nix-action@v31
+
+      - uses: cachix/cachix-action@v16
+        with:
+          name: ${{ vars.CACHIX_CACHE }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Upgrade Flake
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          nix run github:cachix/devenv -- tasks run ci:upgrade
+          git push
+
+      - name: Update rift-wm
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          nix run github:cachix/devenv -- tasks run ci:update
+          git push
+
+      - name: Build and Push to cachix
+        run: |
+          nix run github:cachix/devenv -- tasks run ci:build
+          cachix push "${{ vars.CACHIX_CACHE }}" result
