@@ -1,0 +1,9 @@
+keys:
+  - &maple age1rcflmmt9t2esuyqlw3n8kt0n8f40vpzgh0v30mk63yff8q805a4qv8yax4
+  - &rusel-maple age1dc684gev07q0typ9wq29mkgfer2s2qrlk8j8x7c22j7upnzg03ls2pwl9t
+creation_rules:
+  - path_regex: .*\.enc\.yaml$
+    key_groups:
+      - age:
+          - *rusel-maple
+          - *maple
