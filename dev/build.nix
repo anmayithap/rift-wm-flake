@@ -1,8 +1,8 @@
-{
-  lib,
-  pkgs,
-  ...
-}: {
+{pkgs, ...}: {
+  packages = with pkgs; [
+    nix-prefetch-git
+  ];
+
   tasks = {
     "ci:build:rift-wm" = {
       description = "Build rift-wm";
@@ -16,52 +16,88 @@
       description = "Update rift-wm";
       exec = ''
         set -euo pipefail
-        OWNER="acsandmann"
-        REPO="rift"
-        FILE="rift.nix"
 
-        echo "Fetching latest release..."
-        VERSION=$(curl -s "https://api.github.com/repos/$OWNER/$REPO/releases/latest" | jq -r .tag_name | sed 's/^v//')
-        echo "Latest: $VERSION"
+        # ─── rift-wm
+        echo "--- rift-wm ---"
 
-        CURRENT=$(sed -n 's/.*version = "\([^"]*\)".*/\1/p' "$FILE" | head -1)
-        if [ "$VERSION" = "$CURRENT" ]; then
-          echo "Already at $VERSION, nothing to do"
-          exit 0
+        RIFT_OWNER="acsandmann"
+        RIFT_REPO="rift"
+        RIFT_FILE="rift.nix"
+
+        RIFT_VERSION=$(curl -s "https://api.github.com/repos/$RIFT_OWNER/$RIFT_REPO/releases/latest" | jq -r .tag_name | sed 's/^v//')
+        echo "Latest rift-wm: $RIFT_VERSION"
+
+        RIFT_CURRENT=$(sed -n 's/.*version = "\([^"]*\)".*/\1/p' "$RIFT_FILE" | head -1)
+
+        if [ "$RIFT_VERSION" != "$RIFT_CURRENT" ]; then
+          echo "Updating rift-wm: $RIFT_CURRENT -> $RIFT_VERSION"
+
+          sed -i.bak 's|version = "[^"]*";|version = "'"$RIFT_VERSION"'";|' "$RIFT_FILE"
+
+          RIFT_HASH=$(nix-prefetch-git --url "https://github.com/$RIFT_OWNER/$RIFT_REPO" --rev "v$RIFT_VERSION" | jq -r .hash)
+          sed -i.bak 's|hash = [^;]*;|hash = "'"$RIFT_HASH"'";|' "$RIFT_FILE"
+
+          sed -i.bak 's|cargoHash = [^;]*;|cargoHash = lib.fakeHash;|' "$RIFT_FILE"
+          rm -f "$RIFT_FILE.bak"
+
+          echo "Building rift-wm to extract cargoHash..."
+          RIFT_BUILD=$(nix build .#default 2>&1 || true)
+          CARGO_HASH=$(echo "$RIFT_BUILD" | grep -oP 'got:\s+\Ksha256-[A-Za-z0-9+/=]+' | head -1 || true)
+
+          if [ -z "$CARGO_HASH" ]; then
+            echo "ERROR: could not extract cargoHash"
+            echo "$RIFT_BUILD" | tail -n 20
+            exit 1
+          fi
+
+          sed -i.bak 's|cargoHash = lib.fakeHash;|cargoHash = "'"$CARGO_HASH"'";|' "$RIFT_FILE"
+          rm -f "$RIFT_FILE.bak"
+
+          nix build .#default
+          git add "$RIFT_FILE"
+          git diff --cached --quiet "$RIFT_FILE" || git commit --no-verify -m "feat(rift-wm): $RIFT_CURRENT -> $RIFT_VERSION"
+          echo "rift-wm updated to $RIFT_VERSION"
+        else
+          echo "rift-wm already at $RIFT_VERSION"
         fi
 
-        sed -i.bak 's|version = ".*";|version = "'"$VERSION"'";|' "$FILE"
+        # ─── rift.lua
 
-        echo "Prefetching src hash..."
-        HASH=$(${lib.getExe pkgs.nix-prefetch-git} --url "https://github.com/$OWNER/$REPO" --rev "v$VERSION" | jq -r .hash)
+        echo ""
+        echo "--- rift.lua ---"
 
-        if ! grep -q 'hash = lib.fakeHash;' "$FILE"; then
-          echo "WARNING: hash = lib.fakeHash not found, manual fix may be needed"
+        LUA_OWNER="acsandmann"
+        LUA_REPO="rift.lua"
+        LUA_FILE="rift-lua.nix"
+
+        LUA_COMMIT=$(curl -s "https://api.github.com/repos/$LUA_OWNER/$LUA_REPO/commits/main" | jq -r .sha)
+        LUA_DATE=$(curl -s "https://api.github.com/repos/$LUA_OWNER/$LUA_REPO/commits/main" | jq -r .commit.committer.date | cut -dT -f1)
+        echo "Latest rift.lua: $LUA_COMMIT ($LUA_DATE)"
+
+        LUA_CURRENT=$(sed -n 's/.*rev = "\([^"]*\)".*/\1/p' "$LUA_FILE" | head -1)
+
+        if [ "$LUA_COMMIT" != "$LUA_CURRENT" ]; then
+          LUA_CURRENT_SHORT=$(echo "$LUA_CURRENT" | cut -c1-8)
+          LUA_COMMIT_SHORT=$(echo "$LUA_COMMIT" | cut -c1-8)
+          echo "Updating rift.lua: $LUA_CURRENT_SHORT -> $LUA_COMMIT_SHORT"
+
+          sed -i.bak 's|rev = "[^"]*";|rev = "'"$LUA_COMMIT"'";|' "$LUA_FILE"
+          sed -i.bak 's|version = "[^"]*";|version = "0-unstable-'"$LUA_DATE"'";|' "$LUA_FILE"
+
+          LUA_HASH=$(nix-prefetch-git --url "https://github.com/$LUA_OWNER/$LUA_REPO" --rev "$LUA_COMMIT" | jq -r .hash)
+          sed -i.bak 's|hash = [^;]*;|hash = "'"$LUA_HASH"'";|' "$LUA_FILE"
+          rm -f "$LUA_FILE.bak"
+
+          nix build .#rift-lua
+          git add "$LUA_FILE"
+          git diff --cached --quiet "$LUA_FILE" || git commit --no-verify -m "feat(rift-lua): $LUA_CURRENT_SHORT -> $LUA_COMMIT_SHORT"
+          echo "rift.lua updated to $LUA_COMMIT_SHORT"
+        else
+          echo "rift.lua already at $(echo "$LUA_COMMIT" | cut -c1-8)"
         fi
-        sed -i.bak 's|hash = lib.fakeHash;|hash = "'"$HASH"'";|' "$FILE"
 
-        echo "Building to extract cargoHash..."
-        BUILD_OUT=$(nix build .#default 2>&1 || true)
-        CARGO_HASH=$(echo "$BUILD_OUT" | grep -oP 'got:\s+\Ksha256-[A-Za-z0-9+/=]+' | head -1 || true)
-
-        if [ -z "$CARGO_HASH" ]; then
-          echo "ERROR: could not extract cargoHash. Build output:"
-          echo "$BUILD_OUT"
-          exit 1
-        fi
-
-        if ! grep -q 'cargoHash = lib.fakeHash;' "$FILE"; then
-          echo "WARNING: cargoHash = lib.fakeHash not found, manual fix may be needed"
-        fi
-        sed -i.bak 's|cargoHash = lib.fakeHash;|cargoHash = "'"$CARGO_HASH"'";|' "$FILE"
-
-        rm -f "$FILE.bak"
-
-        nix build .#default
-
-        git add "$FILE"
-        git diff --cached --quiet "$FILE" || git commit --no-verify -m "feat(rift-wm): $CURRENT -> $VERSION"
-        echo "Done: rift-wm $VERSION"
+        echo ""
+        echo "Done."
       '';
     };
     "ci:upgrade" = {
