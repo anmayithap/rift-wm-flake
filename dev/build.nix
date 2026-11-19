@@ -4,9 +4,13 @@
   ...
 }: {
   tasks = {
-    "ci:build" = {
+    "ci:build:rift-wm" = {
       description = "Build rift-wm";
       exec = "nix build .#default";
+    };
+    "ci:build:rift-lua" = {
+      description = "Build rift-lua";
+      exec = "nix build .#rift-lua";
     };
     "ci:update" = {
       description = "Update rift-wm";

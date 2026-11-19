@@ -10,17 +10,27 @@
     };
   };
 
-  outputs = {nixpkgs, ...}: let
+  outputs = {
+    self,
+    nixpkgs,
+    ...
+  }: let
     systems = ["aarch64-darwin"];
     forAllSystems = nixpkgs.lib.genAttrs systems;
   in {
     packages = forAllSystems (system: {
-      default =
-        nixpkgs.legacyPackages.${system}.callPackage ./rift.nix {};
+      default = nixpkgs.legacyPackages.${system}.callPackage ./rift.nix {};
+      rift-lua = nixpkgs.legacyPackages.${system}.callPackage ./rift-lua.nix {};
+    });
+
+    checks = forAllSystems (system: {
+      build = self.packages.${system}.default;
+      rift-lua = self.packages.${system}.rift-lua;
     });
 
     overlays.default = final: _: {
       rift = final.callPackage ./rift.nix {};
+      rift-lua = final.callPackage ./rift-lua.nix {};
     };
   };
 }
