@@ -7,20 +7,20 @@
 }:
 rustPlatform.buildRustPackage rec {
   pname = "rift-wm";
-  version = "0.8.2";
+  version = "0.8.5";
 
   src = fetchFromGitHub {
     owner = "acsandmann";
     repo = "rift";
     rev = "v${version}";
-    hash = "sha256-cLFGVkPF7qGgC4QIyEc8b9rZ0LB8PoH7golgwT59ZRA=";
+    hash = "sha256-5DBFfe4WIbFRg1hCg61h33QMvORrLkA6iHBSmUA2LJo=";
   };
 
   buildInputs = lib.optionals stdenv.hostPlatform.isDarwin [
     apple-sdk
   ];
 
-  cargoHash = "sha256-XFn/DXOimu4gkgOXKDgZ/RBVxida7mvq1+lMx0Wrt/4=";
+  cargoHash = "sha256-UbXSHPfv69Pq7X/JWAwK4mf2Kx9Reap35ubgUzKrnME=";
 
   checkFlags = [
     "--skip=actor::reactor::tests::empty_active_space_membership_during_wake_race_does_not_blank_known_active_windows"

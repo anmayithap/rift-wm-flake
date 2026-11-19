@@ -56,7 +56,7 @@
         nix build .#default
 
         git add "$FILE"
-        git diff --cached --quiet "$FILE" || git commit -m "feat(rift-wm): $CURRENT -> $VERSION"
+        git diff --cached --quiet "$FILE" || git commit --no-verify -m "feat(rift-wm): $CURRENT -> $VERSION"
         echo "Done: rift-wm $VERSION"
       '';
     };
